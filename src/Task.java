@@ -8,6 +8,7 @@ public class Task {
     private double priority;
     private int duration;
     private int weight;
+    private CriticalPathInfoForTask criticalPathInfoForTask;
     private TaskStatus status;
 
     public Task(int id) {
@@ -69,5 +70,13 @@ public class Task {
 
     public void setPriority(double priority) {
         this.priority = priority;
+    }
+
+    public CriticalPathInfoForTask getCriticalPathInfoForTask() {
+        return criticalPathInfoForTask;
+    }
+
+    public void setCriticalPathInfoForTask(CriticalPathInfoForTask criticalPathInfoForTask) {
+        this.criticalPathInfoForTask = criticalPathInfoForTask;
     }
 }

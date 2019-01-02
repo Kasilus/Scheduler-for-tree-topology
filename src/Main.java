@@ -2,32 +2,33 @@ import java.util.*;
 
 public class Main {
 
-    private static int vertices = 17;
-    private static int[][] taskTransitions;
-    // port this to task
-    private static int processors;
-    private static ProcessorNode[] processorNodes;
-    private static int[] verticesOnCriticalPath = new int[vertices];
-    private static int[] timesOnCriticalPath = new int[vertices];
-    private static int vertexStartForCriticalPath = -1;
-    private static Task[] tasks;
-    private static int[] tasksSortedByPriority = new int[vertices];
-    // maybe, refactor
-    private static Map<Integer, List<Integer>> parentTasksToChildTaskRelations = new HashMap<>();
+    public static final int VERTICES_AMOUNT = 17;
+    private static final int PROCESSORS_AMOUNT = 8;
 
     public static void main(String[] args) {
 
-        initializeGraph();
-        findParentTasksToChildTaskRelations();
-        printGraph();
-        printMatrix(taskTransitions);
-        initializeTopology();
-        printTopology();
-        findCriticalPathForVertices();
-        findCriticalPath();
-        countPrioritiesForVertices();
-        sortPrioritiesForVertices();
-        printPrioritiesForVertices();
+        TasksTopology tasksTopology = new TasksTopology(Main.VERTICES_AMOUNT);
+        tasksTopology.print();
+        ProcessorsTopology processorsTopology = new ProcessorsTopology(Main.PROCESSORS_AMOUNT);
+        processorsTopology.print();
+
+        // let's find critical path
+        CriticalPathFinder criticalPathFinder = new CriticalPathFinder();
+        criticalPathFinder.findCriticalPathForEachTask(tasksTopology.getTaskTransitions(),
+                                                       tasksTopology.getTasks());
+        int firstTaskIndexForCriticalPath = criticalPathFinder.findCriticalPath(tasksTopology.getTasks());
+
+        // let's find priorities for each task
+        TasksPriorityFinder tasksPriorityFinder = new TasksPriorityFinder();
+        tasksPriorityFinder.countPrioritiesForTasks(tasksTopology.getTasks(), firstTaskIndexForCriticalPath);
+        int[] tasksIndicesSortedByPriority = tasksPriorityFinder.getSortedTasksIndicesByPriority(tasksTopology.getTasks());
+        tasksPriorityFinder.printPrioritiesForTasksDesc(tasksTopology.getTasks(), tasksIndicesSortedByPriority);
+
+        // and now problem part
+        ProcessorNode[] processorNodes = processorsTopology.getProcessorNodes();
+        Task[] tasks = tasksTopology.getTasks();
+        int[][] taskTransitions = tasksTopology.getTaskTransitions();
+        Map<Integer, List<Integer>> parentTasksToChildTaskRelations = tasksTopology.getParentTasksToChildTaskRelations();
 
         // count priority for processors and do first immerse
         int processorPriority = 0;
@@ -48,7 +49,7 @@ public class Main {
         int tasksCounterToInitialImmerse = 0;
         for (int i = 0; i < processorNodes.length; i++) {
             // TODO do not immerse tasks with parents
-            int taskToImmerseOnInitialImmerse = tasksSortedByPriority[tasksCounterToInitialImmerse];
+            int taskToImmerseOnInitialImmerse = tasksIndicesSortedByPriority[tasksCounterToInitialImmerse];
             boolean isTaskImmersedOnProcessor = false;
             while (!isTaskImmersedOnProcessor && tasksCounterToInitialImmerse < tasks.length) {
                 if (parentTasksToChildTaskRelations.get(tasksCounterToInitialImmerse).size() == 0) {
@@ -62,10 +63,10 @@ public class Main {
         }
 
         int tacts = 0;
-        String[] output = new String[processors * 2];
+        String[] output = new String[processorNodes.length * 2];
         for (int i = 0; i < output.length; i++) {
             if (i % 2 == 0) {
-                output[i] = "P-" + (i/2) + " Current task = " + " Finished tasks = ";
+                output[i] = "P-" + (i / 2) + " Current task = " + " Finished tasks = ";
             } else {
                 output[i] = "";
             }
@@ -80,8 +81,8 @@ public class Main {
                 if (taskOnProcessor != null) {
                     if (processorNodes[i].getTimeToStart() != 0) {
                         processorNodes[i].setTimeToStart(processorNodes[i].getTimeToStart() - 1);
-                        output[i*2] = "P-" + i + " Current task = " + taskOnProcessor.getId() + " Finished tasks = " + processorNodes[i].getCompletedTasks();
-                        output[i*2 + 1] += "_";
+                        output[i * 2] = "P-" + i + " Current task = " + taskOnProcessor.getId() + " Finished tasks = " + processorNodes[i].getCompletedTasks();
+                        output[i * 2 + 1] += "_";
                     } else {
                         // there is some task on processor
                         output[i * 2] = "P-" + i + " Current task = " + taskOnProcessor.getId() + " Finished tasks = " + processorNodes[i].getCompletedTasks();
@@ -92,8 +93,8 @@ public class Main {
                         }
                     }
                 } else {
-                    output[i*2] = "P-" + i + " Current task = null" + " Finished tasks = " + processorNodes[i].getCompletedTasks();
-                    output[i*2 + 1] += "_";
+                    output[i * 2] = "P-" + i + " Current task = null" + " Finished tasks = " + processorNodes[i].getCompletedTasks();
+                    output[i * 2 + 1] += "_";
                 }
             }
             System.out.println(String.join("\n", output));
@@ -117,8 +118,8 @@ public class Main {
 
             // find processor for free task
             int countFinishedTasks = 0;
-            for (int i = 0; i < tasksSortedByPriority.length; i++) {
-                Task taskToImmerse = tasks[tasksSortedByPriority[i]];
+            for (int i = 0; i < tasksIndicesSortedByPriority.length; i++) {
+                Task taskToImmerse = tasks[tasksIndicesSortedByPriority[i]];
                 // immerse just ready tasks
                 if (taskToImmerse.isReady()) {
                     int minImmersionStartTime = Integer.MAX_VALUE;
@@ -154,9 +155,9 @@ public class Main {
                     }
                 }
 
-                if (tasks[tasksSortedByPriority[i]].isFinished()) {
+                if (tasks[tasksIndicesSortedByPriority[i]].isFinished()) {
                     countFinishedTasks++;
-                    if (countFinishedTasks == tasksSortedByPriority.length) {
+                    if (countFinishedTasks == tasksIndicesSortedByPriority.length) {
                         isNotCompletedTasks = false;
                     }
                 }
@@ -164,254 +165,6 @@ public class Main {
 
         }
 
-    }
-
-    private static void findParentTasksToChildTaskRelations() {
-
-        for (int j = 0; j < taskTransitions[0].length; j++) {
-            List<Integer> parentTasks = new ArrayList<>();
-            for (int i = 0; i < taskTransitions.length; i++) {
-                if (taskTransitions[i][j] != 0) {
-                    parentTasks.add(i);
-                }
-            }
-        parentTasksToChildTaskRelations.put(j, parentTasks);
-        }
-    }
-
-    private static void sortPrioritiesForVertices() {
-        List<Task> taskList = Arrays.asList(Arrays.copyOf(tasks, tasks.length));
-        taskList.sort(
-                (task1, task2) -> Double.compare(task2.getPriority(), task1.getPriority())
-        );
-        for (int i = 0; i < taskList.size(); i++) {
-            tasksSortedByPriority[i] = taskList.get(i).getId();
-        }
-    }
-
-    private static void printPrioritiesForVertices() {
-        System.out.println("printPrioritiesForVertices()");
-        for (int i = 0; i < tasksSortedByPriority.length; i++) {
-            System.out.println("Vertex-" + (tasks[tasksSortedByPriority[i]].getId() + 1) + " p=" + tasks[tasksSortedByPriority[i]].getPriority());
-        }
-    }
-
-    private static void countPrioritiesForVertices() {
-        System.out.println("Priorities");
-        for (int i = 0; i < vertices; i++) {
-            double priority = (double)timesOnCriticalPath[i]/timesOnCriticalPath[vertexStartForCriticalPath]
-                    + (double)verticesOnCriticalPath[i]/verticesOnCriticalPath[vertexStartForCriticalPath];
-            System.out.println("Vertex-"+i+" p="+priority);
-            tasks[i].setPriority(priority);
-        }
-    }
-
-    private static void findCriticalPath() {
-        int maxTimes = 0;
-        for (int i = 0; i < timesOnCriticalPath.length; i++) {
-            if (maxTimes < timesOnCriticalPath[i]) {
-                vertexStartForCriticalPath = i;
-                maxTimes = timesOnCriticalPath[i];
-            }
-            System.out.println("Vertex-" + (i+1) + " has critical path time and vertices: t=" + timesOnCriticalPath[i] +
-                    ",v=" + verticesOnCriticalPath[i]);
-        }
-        System.out.println("Critical path:\tVertex-" + (vertexStartForCriticalPath+1) + " t=" + timesOnCriticalPath[vertexStartForCriticalPath] + ",n=" +
-                verticesOnCriticalPath[vertexStartForCriticalPath]);
-    }
-
-    private static void findCriticalPathForVertices() {
-        boolean[] isCriticalPathFoundVertices = new boolean[vertices];
-        findCriticalPathForVerticesWithoutChildren(isCriticalPathFoundVertices);
-        findCriticalPathForVerticesWithChildren(isCriticalPathFoundVertices);
-    }
-
-    private static void findCriticalPathForVerticesWithChildren(boolean[] isCriticalPathFoundVertices) {
-        boolean[][] isCriticalPathCheckedForChild = new boolean[vertices][vertices];
-        while (!isAllVerticesChecked(isCriticalPathFoundVertices)) {
-            for (int i = 0; i < taskTransitions.length; i++) {
-                // check if critical path found for the source vertex
-                if (!isCriticalPathFoundVertices[i]) {
-                    for (int j = 0; j < taskTransitions[0].length; j++) {
-                        if (taskTransitions[i][j] != 0 && !isCriticalPathCheckedForChild[i][j]) {
-                            // check if critical path was found for transition vertex
-                            if (isCriticalPathFoundVertices[j]) {
-                                isCriticalPathCheckedForChild[i][j] = true;
-                                int criticalPathVertices = verticesOnCriticalPath[j] + 1;
-                                int criticalPathTimes = timesOnCriticalPath[j] + taskTransitions[i][j] + tasks[i].getWeight();
-                                if (criticalPathTimes > timesOnCriticalPath[i]) {
-                                    timesOnCriticalPath[i] = criticalPathTimes;
-                                    verticesOnCriticalPath[i] = criticalPathVertices;
-                                }
-                            } else {
-                                break;
-                            }
-                        }
-                        if (j == taskTransitions[0].length - 1) {
-                            isCriticalPathFoundVertices[i] = true;
-                            System.out.println("Critical path found for Vertex-" + (i+1) + " with t=" + timesOnCriticalPath[i]
-                                    + ",n=" + verticesOnCriticalPath[i]);
-                        }
-                    }
-                }
-
-            }
-        }
-    }
-
-    private static void findCriticalPathForVerticesWithoutChildren(boolean[] isCriticalPathFoundVertices) {
-        for (int i = 0; i < taskTransitions.length; i++) {
-            boolean hasParents = false;
-            for (int j = 0; j < taskTransitions[0].length && !hasParents; j++) {
-                if (taskTransitions[i][j] != 0) {
-                    hasParents = true;
-                }
-            }
-            if (!hasParents) {
-                verticesOnCriticalPath[i] = 1;
-                timesOnCriticalPath[i] = tasks[i].getWeight();
-                isCriticalPathFoundVertices[i] = true;
-            }
-        }
-    }
-
-    private static boolean isAllVerticesChecked(boolean[] isCriticalPathFoundVertices) {
-        for (int i = 0; i < isCriticalPathFoundVertices.length; i++) {
-            if (!isCriticalPathFoundVertices[i]) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static void printTopology() {
-        for (int i = 0; i < processorNodes.length; i++) {
-            System.out.print("P-" + (i+1));
-            List<ProcessorNode> parents = processorNodes[i].getParents();
-            List<ProcessorNode> children = processorNodes[i].getChildren();
-            System.out.print("\tParents: ");
-            for (ProcessorNode parent: parents) {
-                System.out.print("P-" + (parent.getId() + 1) + ",");
-            }
-            System.out.print("\tChildren: ");
-            for (ProcessorNode child: children) {
-                System.out.print("P-" + (child.getId() + 1) + ",");
-            }
-            System.out.println();
-        }
-    }
-
-    private static void initializeTopology() {
-        processors = 8;
-        processorNodes = new ProcessorNode[processors];
-        for (int i = 0; i < processors; i++) {
-            processorNodes[i] = new ProcessorNode(i);
-        }
-        // add child and parent relations
-        // 1
-        processorNodes[0].addChild(processorNodes[1]);
-        processorNodes[0].addChild(processorNodes[2]);
-        // 2
-        processorNodes[1].addParent(processorNodes[0]);
-        processorNodes[1].addChild(processorNodes[3]);
-        processorNodes[1].addChild(processorNodes[4]);
-        processorNodes[1].addChild(processorNodes[5]);
-        // 3
-        processorNodes[2].addParent(processorNodes[0]);
-        processorNodes[2].addChild(processorNodes[6]);
-        processorNodes[2].addChild(processorNodes[7]);
-        // 4
-        processorNodes[3].addParent(processorNodes[1]);
-        // 5
-        processorNodes[4].addParent(processorNodes[1]);
-        // 6
-        processorNodes[5].addParent(processorNodes[1]);
-        // 7
-        processorNodes[6].addParent(processorNodes[2]);
-        // 8
-        processorNodes[7].addParent(processorNodes[2]);
-    }
-
-    private static void initializeGraph() {
-        taskTransitions = new int[vertices][vertices];
-        tasks = new Task[vertices];
-        for (int i = 0; i < tasks.length; i++) {
-            tasks[i] = new Task(i);
-        }
-        // 1
-        tasks[0].setWeight(2);
-        taskTransitions[0][8] = 1;
-        // 2
-        tasks[1].setWeight(1);
-        taskTransitions[1][9] = 2;
-        // 3
-        tasks[2].setWeight(2);
-        taskTransitions[2][9] = 3;
-        // 4
-        tasks[3].setWeight(2);
-        taskTransitions[3][10] = 1;
-        // 5
-        tasks[4].setWeight(1);
-        taskTransitions[4][10] = 3;
-        //6
-        tasks[5].setWeight(3);
-        taskTransitions[5][15] = 2;
-        // 7
-        tasks[6].setWeight(3);
-        taskTransitions[6][11] = 3;
-        // 8
-        tasks[7].setWeight(4);
-        taskTransitions[7][11] = 1;
-        // 9
-        tasks[8].setWeight(1);
-        taskTransitions[8][12] = 2;
-        taskTransitions[8][13] = 1;
-        // 10
-        tasks[9].setWeight(1);
-        taskTransitions[9][13] = 1;
-        taskTransitions[9][14] = 1;
-        // 11
-        tasks[10].setWeight(2);
-        taskTransitions[10][14] = 2;
-        // 12
-        tasks[11].setWeight(3);
-        taskTransitions[11][15] = 1;
-        // 13
-        tasks[12].setWeight(1);
-        // 14
-        tasks[13].setWeight(3);
-        // 15
-        tasks[14].setWeight(2);
-        taskTransitions[14][16] = 3;
-        // 16
-        tasks[15].setWeight(1);
-        taskTransitions[15][16] = 1;
-        // 17
-        tasks[16].setWeight(1);
-    }
-
-    private static void printGraph() {
-        System.out.println("Tasks graph");
-        for (int i = 0; i < vertices; i++) {
-            System.out.print("Vertex-" + (i+1) + ",weight=" + tasks[i].getWeight() +
-                    "\tTransitions:");
-            for (int j = 0; j < vertices; j++) {
-                if (taskTransitions[i][j] != 0) {
-                    System.out.print("to=" + (j+1) + ",t_weight=" +
-                            tasks[j].getWeight() +"; ");
-                }
-            }
-            System.out.println();
-        }
-    }
-
-    private static void printMatrix(int[][] matrix) {
-        for (int i = 0; i < matrix.length; i++) {
-            for (int j = 0; j < matrix[0].length; j++) {
-                System.out.print(matrix[i][j] + " ");
-            }
-            System.out.println();
-        }
     }
 
     private static int getStartTimeForTaskImmersion(ProcessorNode processorNode, List<Integer> parentTasksForReadyToImmerseTask) {
@@ -433,7 +186,7 @@ public class Main {
         int pathLengthFromChildren = 0;
         int pathLengthFromParents = 0;
         List<ProcessorNode> parents = processorNode.getParents();
-        for (ProcessorNode parent: parents) {
+        for (ProcessorNode parent : parents) {
             if (parent.getId() != callerId) {
                 int pathLengthTemp = recursivePassForProcessorParentsAndChildren(parent, processorNode.getId(), topChildCallerId, parentTasksForReadyToImmerseTask);
                 if (pathLengthFromParents < pathLengthTemp) {
@@ -468,7 +221,7 @@ public class Main {
         return pathLength + 1;
     }
 
-//    private static void test() {
+//    private  void test() {
 //
 //        int pathLength;
 //        // 1. 2[4, 8] = 3
