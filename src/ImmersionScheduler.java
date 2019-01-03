@@ -5,25 +5,27 @@ import java.util.Map;
 public class ImmersionScheduler {
 
     public void doFirstImmersion(ProcessorNode[] processorNodes, Task[] tasks, int[] tasksIndicesSortedByPriority,
-                                 int[] processorIndicesSortedByPriority, Map<Integer, List<Integer>> parentTasksToChildTaskRelations) {
+                                 int[] processorIndicesSortedByPriority, Map<Integer, Map<Integer, Integer>> parentTasksToChildTaskRelations) {
         int tasksCounterToInitialImmerse = 0;
         for (int i = 0; i < processorIndicesSortedByPriority.length; i++) {
             int taskToImmerseOnInitialImmerse = tasksIndicesSortedByPriority[tasksCounterToInitialImmerse];
             boolean isTaskImmersedOnProcessor = false;
             while (!isTaskImmersedOnProcessor && tasksCounterToInitialImmerse < tasks.length) {
-                if (parentTasksToChildTaskRelations.get(tasksCounterToInitialImmerse).size() == 0) {
+                System.out.println("Task-" + (tasks[taskToImmerseOnInitialImmerse].getId()+1) + " with parents size: " + parentTasksToChildTaskRelations.get(taskToImmerseOnInitialImmerse).size());
+                if (parentTasksToChildTaskRelations.get(taskToImmerseOnInitialImmerse).size() == 0) {
+                    System.out.println("Immerse task-" + (tasks[taskToImmerseOnInitialImmerse].getId()+1) + " on P-" + (processorNodes[i].getId()+1));
                     processorNodes[processorIndicesSortedByPriority[i]].immerseTask(tasks[taskToImmerseOnInitialImmerse], 0);
                     isTaskImmersedOnProcessor = true;
-                } else {
-                    tasksCounterToInitialImmerse++;
                 }
                 tasksCounterToInitialImmerse++;
+                taskToImmerseOnInitialImmerse = tasksIndicesSortedByPriority[tasksCounterToInitialImmerse];
             }
         }
     }
 
     public void doNextImmersions(ProcessorNode[] processorNodes, Task[] tasks, int[][] taskTransitions,
-                                 int[] tasksIndicesSortedByPriority, Map<Integer, List<Integer>> parentTasksToChildTaskRelations) {
+                                 int[] tasksIndicesSortedByPriority,
+                                 Map<Integer, Map<Integer, Integer>> parentTasksToChildTaskRelations) {
         int tacts = 0;
         String[] output = new String[processorNodes.length * 2];
         for (int i = 0; i < output.length; i++) {
@@ -90,7 +92,10 @@ public class ImmersionScheduler {
                         if (processorNodes[j].getCurrentTask() == null) {
                             // find immersion start time for task in free processor
                             // get parent tasks for current task
-                            int immersionStartTime = getStartTimeForTaskImmersion(processorNodes[j], parentTasksToChildTaskRelations.get(i));
+                            int immersionStartTime = getStartTimeForTaskImmersion(processorNodes[j],
+                                    parentTasksToChildTaskRelations.get(tasksIndicesSortedByPriority[i]),
+                                    taskToImmerse.getId(),
+                                    parentTasksToChildTaskRelations);
                             if (immersionStartTime <= minImmersionStartTime) {
                                 if (minImmersionStartTime == immersionStartTime) {
                                     // choose processor with bigger priority
@@ -124,31 +129,36 @@ public class ImmersionScheduler {
         }
     }
 
-    private int getStartTimeForTaskImmersion(ProcessorNode
-                                                     processorNode, List<Integer> parentTasksForReadyToImmerseTask) {
+    private int getStartTimeForTaskImmersion(ProcessorNode processorNode,
+                                             Map<Integer, Integer> parentTasksForReadyToImmerseTask,
+                                             int taskToImmerseId, Map<Integer, Map<Integer, Integer>> parentTasksToChildTaskRelations) {
         // exit if no parents needed
         if (parentTasksForReadyToImmerseTask.size() == 0) {
             return 0;
         }
-        int startTime = recursivePassForProcessorParentsAndChildren(processorNode, processorNode.getId(), parentTasksForReadyToImmerseTask);
-        if (startTime == 0) {
-            return startTime;
+        MinimalTimeStart minimalTimeStart = recursivePassForProcessorParentsAndChildren(processorNode, processorNode.getId(),
+                taskToImmerseId, parentTasksForReadyToImmerseTask, parentTasksToChildTaskRelations);
+        if (minimalTimeStart == null) {
+            return 0;
         } else {
-            return startTime - 1;
+            return minimalTimeStart.getPathLength() - 1;
         }
     }
 
-    private int recursivePassForProcessorParentsAndChildren(ProcessorNode processorNode, int callerId,
-                                                            List<Integer> parentTasksForReadyToImmerseTask) {
-        int pathLength = 0;
-        int pathLengthFromChildren = 0;
-        int pathLengthFromParents = 0;
+    private MinimalTimeStart recursivePassForProcessorParentsAndChildren(ProcessorNode processorNode, int callerId, int topCallerId,
+                                                                         Map<Integer, Integer> parentTasksForReadyToImmerseTask,
+                                                                         Map<Integer, Map<Integer, Integer>> parentTasksToChildTaskRelations) {
+        MinimalTimeStart minimalTimeStart = new MinimalTimeStart();
+        MinimalTimeStart minimalTimeStartFromParents = new MinimalTimeStart();
+        MinimalTimeStart minimalTimeStartFromChildren = new MinimalTimeStart();
         List<ProcessorNode> parents = processorNode.getParents();
         for (ProcessorNode parent : parents) {
             if (parent.getId() != callerId) {
-                int pathLengthTemp = recursivePassForProcessorParentsAndChildren(parent, processorNode.getId(), parentTasksForReadyToImmerseTask);
-                if (pathLengthFromParents < pathLengthTemp) {
-                    pathLengthFromParents = pathLengthTemp;
+                MinimalTimeStart minimalTimeStartTemp = recursivePassForProcessorParentsAndChildren(parent, processorNode.getId(),
+                        topCallerId, parentTasksForReadyToImmerseTask, parentTasksToChildTaskRelations);
+                if (minimalTimeStartTemp != null && minimalTimeStartFromParents.getPathLength() < minimalTimeStartTemp.getPathLength()) {
+                    minimalTimeStartFromParents.setPathLength(minimalTimeStartTemp.getPathLength());
+                    minimalTimeStartFromParents.setParentTaskId(minimalTimeStartTemp.getParentTaskId());
                 }
             }
         }
@@ -156,26 +166,67 @@ public class ImmersionScheduler {
         if (children != null) {
             for (ProcessorNode child : children) {
                 if (child.getId() != callerId) {
-                    int pathLengthTemp = recursivePassForProcessorParentsAndChildren(child, processorNode.getId(), parentTasksForReadyToImmerseTask);
-                    if (pathLengthFromChildren < pathLengthTemp) {
-                        pathLengthFromChildren = pathLengthTemp;
+                    MinimalTimeStart minimalTimeStartTemp = recursivePassForProcessorParentsAndChildren(child, processorNode.getId(),
+                            topCallerId, parentTasksForReadyToImmerseTask, parentTasksToChildTaskRelations);
+                    if (minimalTimeStartTemp != null && minimalTimeStartFromChildren.getPathLength() < minimalTimeStartTemp.getPathLength()) {
+                        minimalTimeStartFromChildren.setPathLength(minimalTimeStartTemp.getPathLength());
+                        minimalTimeStartFromChildren.setParentTaskId(minimalTimeStartTemp.getParentTaskId());
                     }
                 }
             }
         }
-        pathLength = pathLengthFromChildren;
-        if (pathLengthFromChildren < pathLengthFromParents) {
-            pathLength = pathLengthFromParents;
+        minimalTimeStart = minimalTimeStartFromChildren;
+        if (minimalTimeStartFromChildren.getPathLength() < minimalTimeStartFromParents.getParentTaskId()) {
+            minimalTimeStart = minimalTimeStartFromParents;
         }
 
-        if (pathLength == 0) {
-            if (!Collections.disjoint(processorNode.getCompletedTasks(), parentTasksForReadyToImmerseTask)) {
+        if (minimalTimeStart.getPathLength() == 0) {
+            if (!Collections.disjoint(processorNode.getCompletedTasks(), parentTasksForReadyToImmerseTask.keySet())) {
                 // tadaaam! parent task!
-                return 1;
+                // TODO find parent task from completed
+                for (int completedTaskIndex: processorNode.getCompletedTasks()) {
+                    if (parentTasksForReadyToImmerseTask.keySet().contains(completedTaskIndex)) {
+                        minimalTimeStart.setParentTaskId(completedTaskIndex);
+                        minimalTimeStart.setPathLength(parentTasksToChildTaskRelations.get(topCallerId).get(completedTaskIndex));
+                        return minimalTimeStart;
+                    }
+                }
+
             } else {
-                return 0;
+                return null;
             }
         }
-        return pathLength + 1;
+        minimalTimeStart.setPathLength(minimalTimeStart.getPathLength()
+                + parentTasksToChildTaskRelations.get(topCallerId).get(minimalTimeStart.getParentTaskId()));
+        return minimalTimeStart;
+    }
+
+    class MinimalTimeStart {
+        private int pathLength;
+        private int parentTaskId;
+
+        public MinimalTimeStart() {
+        }
+
+        public MinimalTimeStart(int pathLength, int parentTaskId) {
+            this.pathLength = pathLength;
+            this.parentTaskId = parentTaskId;
+        }
+
+        public int getPathLength() {
+            return pathLength;
+        }
+
+        public void setPathLength(int pathLength) {
+            this.pathLength = pathLength;
+        }
+
+        public int getParentTaskId() {
+            return parentTaskId;
+        }
+
+        public void setParentTaskId(int parentTaskId) {
+            this.parentTaskId = parentTaskId;
+        }
     }
 }

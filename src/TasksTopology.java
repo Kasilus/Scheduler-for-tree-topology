@@ -8,7 +8,7 @@ public class TasksTopology {
     int[][] taskTransitions;
     Task[] tasks;
     // we can count this once and don't do this again. From task transitions we can fast get transition weight
-    Map<Integer, List<Integer>> parentTasksToChildTaskRelations = new HashMap<>();
+    Map<Integer, Map<Integer, Integer>> parentTasksToChildTaskRelations = new HashMap<>();
 
     public TasksTopology(int verticesAmount) {
         initTransitions(verticesAmount);
@@ -95,15 +95,14 @@ public class TasksTopology {
     }
 
     private void findParentTasksToChildTaskRelations() {
-
         for (int j = 0; j < this.taskTransitions[0].length; j++) {
-            List<Integer> parentTasks = new ArrayList<>();
+            Map<Integer, Integer> parentToChildWeightRelations = new HashMap<>();
             for (int i = 0; i < this.taskTransitions.length; i++) {
                 if (this.taskTransitions[i][j] != 0) {
-                    parentTasks.add(i);
+                    parentToChildWeightRelations.put(i, taskTransitions[i][j]);
                 }
             }
-            parentTasksToChildTaskRelations.put(j, parentTasks);
+            parentTasksToChildTaskRelations.put(j, parentToChildWeightRelations);
         }
     }
 
@@ -140,11 +139,11 @@ public class TasksTopology {
         this.tasks = tasks;
     }
 
-    public Map<Integer, List<Integer>> getParentTasksToChildTaskRelations() {
+    public Map<Integer, Map<Integer, Integer>> getParentTasksToChildTaskRelations() {
         return parentTasksToChildTaskRelations;
     }
 
-    public void setParentTasksToChildTaskRelations(Map<Integer, List<Integer>> parentTasksToChildTaskRelations) {
+    public void setParentTasksToChildTaskRelations(Map<Integer, Map<Integer, Integer>> parentTasksToChildTaskRelations) {
         this.parentTasksToChildTaskRelations = parentTasksToChildTaskRelations;
     }
 }

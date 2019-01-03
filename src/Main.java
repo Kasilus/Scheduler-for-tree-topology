@@ -31,13 +31,7 @@ public class Main {
         int[] processorIndicesSortedByPriority = processorPriorityFinder.getSortedProcessorIndicesByPriority(processorsTopology.getProcessorNodes());
         processorPriorityFinder.printPrioritiesForProcessorsDesc(processorsTopology.getProcessorNodes());
 
-        // !!! and now problem part
-        ProcessorNode[] processorNodes = processorsTopology.getProcessorNodes();
-        Task[] tasks = tasksTopology.getTasks();
-        int[][] taskTransitions = tasksTopology.getTaskTransitions();
-        Map<Integer, List<Integer>> parentTasksToChildTaskRelations = tasksTopology.getParentTasksToChildTaskRelations();
-
-        // do first immersion
+        // let's immerse this and output each step
         ImmersionScheduler immersionScheduler = new ImmersionScheduler();
         immersionScheduler.doFirstImmersion(processorsTopology.getProcessorNodes(), tasksTopology.getTasks(),
                 tasksIndicesSortedByPriority, processorIndicesSortedByPriority, tasksTopology.getParentTasksToChildTaskRelations());
